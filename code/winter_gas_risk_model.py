@@ -207,22 +207,9 @@ fig.savefig(S1_DIR / "stage1_posterior_density.eps", format="eps", bbox_inches="
 plt.close()
 print("  Posterior density plot saved.")
 
-# ============================================================
-# Predictions (full posterior mean on test set)
-# ============================================================
-
-alpha_s = samples["alpha"]
-beta_s  = samples["beta"]
-
-logits_test = (
-    alpha_s[:, None]
-    + beta_s[:, 0][:, None] * X_test[:, 0]
-    + beta_s[:, 1][:, None] * X_test[:, 1]
-)
-prob_test = expit(logits_test).mean(axis=0)
 
 # ============================================================
-# ROC Curve — 5-fold Stratified Cross-Validation
+# Validation: ROC Curve — 5-fold Stratified Cross-Validation
 # ============================================================
 
 print("\nRunning 5-fold CV for ROC + calibration ...")
@@ -300,7 +287,7 @@ plt.close()
 print("  ROC curve saved.")
 
 # ============================================================
-# Calibration Curve — pooled OOF predictions
+# Validation: Calibration Curve — pooled OOF predictions
 # ============================================================
 
 oof_probs_arr  = np.array(oof_probs)
@@ -377,22 +364,22 @@ plt.close()
 print("  Calibration curve saved.")
 
 # ============================================================
-# Interactive HTML — Probability Surface (D_norm × CEI)
+# Visualization — Probability Surface Plot
 # ============================================================
 
 print("\nBuilding probability surface ...")
-
+ 
 alpha_s = np.array(samples["alpha"])
 beta_s  = np.array(samples["beta"])
-
+ 
 d_grid   = np.linspace(X_train[:, 0].min(), X_train[:, 0].max(), 60)
 cei_grid = np.linspace(X_train[:, 1].min(), X_train[:, 1].max(), 60)
 F1, F2   = np.meshgrid(d_grid, cei_grid)
-
+ 
 surf_mean  = np.zeros_like(F1)
 surf_lower = np.zeros_like(F1)
 surf_upper = np.zeros_like(F1)
-
+ 
 for i in range(F1.shape[0]):
     for j in range(F1.shape[1]):
         log_ij   = alpha_s + beta_s[:, 0]*F1[i, j] + beta_s[:, 1]*F2[i, j]
@@ -400,77 +387,12 @@ for i in range(F1.shape[0]):
         surf_mean[i, j]  = p_ij.mean()
         surf_lower[i, j] = np.percentile(p_ij, 2.5)
         surf_upper[i, j] = np.percentile(p_ij, 97.5)
-
-# ── Plotly interactive HTML ────────────────────────────────
-
-fig_html = go.Figure()
-
-fig_html.add_trace(go.Surface(
-    x=F1, y=F2, z=surf_mean,
-    colorscale="Viridis",
-    colorbar=dict(
-        title=dict(text="Mean Probability", font=dict(size=20)),
-        tickfont=dict(size=20), tickformat=".0%",
-        len=0.7, thickness=20
-    ),
-    name="Mean Probability", showscale=True, opacity=1.0
-))
-fig_html.add_trace(go.Surface(
-    x=F1, y=F2, z=surf_upper,
-    colorscale="Blues", showscale=False, opacity=0.35,
-    name="Upper 95% CI"
-))
-fig_html.add_trace(go.Surface(
-    x=F1, y=F2, z=surf_lower,
-    colorscale="Reds", showscale=False, opacity=0.35,
-    name="Lower 95% CI"
-))
-fig_html.add_trace(go.Scatter3d(
-    x=[None], y=[None], z=[None], mode="markers",
-    marker=dict(size=20, color="blue"),
-    name="Upper 95% CI", showlegend=True
-))
-fig_html.add_trace(go.Scatter3d(
-    x=[None], y=[None], z=[None], mode="markers",
-    marker=dict(size=20, color="red"),
-    name="Lower 95% CI", showlegend=True
-))
-
-fig_html.update_layout(
-    font=dict(family="Times New Roman", size=20),
-    margin=dict(l=0, r=0, t=0, b=0),
-    legend=dict(x=0.79, y=0.88, font=dict(size=20), itemsizing="constant"),
-    scene=dict(
-        xaxis=dict(title=dict(text="D<sub>norm</sub>", font=dict(size=20)),
-                   tickfont=dict(size=20), autorange="reversed"),
-        yaxis=dict(title=dict(text="CEI", font=dict(size=20)),
-                   tickfont=dict(size=20)),
-        zaxis=dict(title=dict(text="Probability", font=dict(size=20)),
-                   tickfont=dict(size=20), tickformat=".0%", range=[0, 1]),
-        camera=dict(eye=dict(x=2.5, y=2.5, z=0.45),
-                    up=dict(x=0, y=0, z=1),
-                    center=dict(x=0, y=0, z=0)),
-        aspectmode="manual", aspectratio=dict(x=1.5, y=1.5, z=1.5)
-    )
-)
-fig_html.data[0].update(
-    colorbar=dict(
-        title=dict(text="Mean Probability", font=dict(size=20)),
-        tickfont=dict(size=20), tickformat=".0%",
-        len=0.7, thickness=20
-    )
-)
-fig_html.data[3].marker.size = 20
-fig_html.data[4].marker.size = 20
-
-# fig_html.write_html(S1_DIR / "stage1_probability_surface.html")
-# print("  Interactive HTML surface saved.")
-
+ 
 # ── Matplotlib 3D Surface — PNG + PDF (vector) ─────────────
-
+ 
 fig3d = plt.figure(figsize=(16, 11))
 ax3d  = fig3d.add_subplot(111, projection="3d")
-
+ 
 surf_mpl = ax3d.plot_surface(
     F1, F2, surf_mean,
     cmap="viridis", alpha=1.0, rasterized=True, zorder=1
@@ -483,46 +405,46 @@ ax3d.plot_surface(
     F1, F2, surf_lower,
     cmap="Reds", alpha=0.35, rasterized=True, zorder=3
 )
-
+ 
 cbar3d = fig3d.colorbar(surf_mpl, ax=ax3d, shrink=0.5, aspect=10, pad=0.08)
 cbar3d.set_label("Mean Probability", fontsize=20, labelpad=10)
 cbar3d.ax.tick_params(labelsize=20)
 cbar3d.ax.yaxis.set_major_formatter(
     mticker.FuncFormatter(lambda x, _: f"{x:.0%}")
 )
-
+ 
 ax3d.set_xlabel(r"$D_\mathrm{norm}$", fontsize=20, labelpad=12)
 ax3d.set_ylabel("CEI",                fontsize=20, labelpad=12)
 ax3d.set_zlabel("")
 fig3d.text(0.15, 0.50, "Probability",
            va="center", ha="center", rotation=90, fontsize=20)
-
+ 
 ax3d.tick_params(axis="x", labelsize=20)
 ax3d.tick_params(axis="y", labelsize=20)
 ax3d.tick_params(axis="z", labelsize=20)
-
+ 
 ax3d.set_zlim(0, 1)
 ax3d.zaxis.set_major_formatter(
     mticker.FuncFormatter(lambda x, _: f"{x:.0%}")
 )
 ax3d.invert_xaxis()
 ax3d.view_init(elev=18, azim=45)
-
+ 
 legend_elements = [
     Patch(facecolor=plt.cm.Blues(0.6), alpha=0.35, label="Upper 95% CI"),
     Patch(facecolor=plt.cm.Reds(0.6),  alpha=0.35, label="Lower 95% CI"),
 ]
 ax3d.legend(handles=legend_elements, fontsize=20,
             loc="upper right", frameon=False)
-
+ 
 plt.subplots_adjust(left=0.25, right=0.88, bottom=0.05, top=0.95)
 fig3d.canvas.draw()
-
+ 
 fig3d.savefig(S1_DIR / "stage1_probability_surface.png",
               dpi=300, bbox_inches="tight", pad_inches=0.35)
 fig3d.savefig(S1_DIR / "stage1_probability_surface.pdf",
               format="pdf", bbox_inches="tight", pad_inches=0.35)
 plt.close(fig3d)
 print("  Probability surface PNG + PDF saved.")
-
+ 
 print("\nStage 1 complete. All outputs in:", S1_DIR)
