@@ -1,14 +1,14 @@
 """
-A Multi-Stage Probabilistic Framework for Gas-Fired Generator Performance
-During Extreme Winter Weather — Reproducible Analysis Script
+A multi-stage probabilistic framework to estimate gas-fired generator performance 
+during extreme winter weather
 
 Authors: Sajjad Uddin Mahmud, Anamika Dubey
 Washington State University
 
 Usage
 -----
-1. Place hourly_dataset_NY.csv and event_dataset_NY.csv in the same
-   folder as this script (or update DATA_DIR below).
+1. Keep the dataset files in DATA_DIR, 
+    Files: hourly_dataset_NY.csv and event_dataset_NY.csv.
 2. Run:  python winter_gas_generator_risk.py
 3. All outputs are saved to the folder specified by OUT_DIR.
 
@@ -17,20 +17,6 @@ Requirements
     pip install numpy pandas matplotlib seaborn scipy scikit-learn
                 jax numpyro arviz plotly
 
-Dataset columns used
---------------------
-hourly_dataset_NY.csv
-    datetime      : hourly timestamp
-    CEI           : Cold Exposure Index (standardised)
-    D_norm        : normalised demand
-    E_t           : event indicator (1 = winter contingency event, 0 = no event)
-
-event_dataset_NY.csv
-    event_index   : unique event identifier
-    NAC_norm      : normalised net available capacity (0 = full outage)
-    duration      : event duration (hh:mm)
-    CEI           : Cold Exposure Index at event initiation (standardised)
-    D_norm        : normalised demand at event initiation
 """
 
 # ============================================================
