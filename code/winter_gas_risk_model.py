@@ -1,14 +1,14 @@
 """
-A multi-stage probabilistic framework to estimate gas-fired generator performance 
-during extreme winter weather
+A Multi-Stage Probabilistic Framework for Gas-Fired Generator Performance
+During Extreme Winter Weather — Reproducible Analysis Script
 
 Authors: Sajjad Uddin Mahmud, Anamika Dubey
 Washington State University
 
 Usage
 -----
-1. Keep the dataset files in DATA_DIR, 
-    Files: hourly_dataset_NY.csv and event_dataset_NY.csv.
+1. Place hourly_dataset_NY.csv and event_dataset_NY.csv in the same
+   folder as this script (or update DATA_DIR below).
 2. Run:  python winter_gas_generator_risk.py
 3. All outputs are saved to the folder specified by OUT_DIR.
 
@@ -17,6 +17,20 @@ Requirements
     pip install numpy pandas matplotlib seaborn scipy scikit-learn
                 jax numpyro arviz plotly
 
+Dataset columns used
+--------------------
+hourly_dataset_NY.csv
+    datetime      : hourly timestamp
+    CEI           : Cold Exposure Index (standardised)
+    D_norm        : normalised demand
+    E_t           : event indicator (1 = winter contingency event, 0 = no event)
+
+event_dataset_NY.csv
+    event_index   : unique event identifier
+    NAC_norm      : normalised net available capacity (0 = full outage)
+    duration      : event duration (hh:mm)
+    CEI           : Cold Exposure Index at event initiation (standardised)
+    D_norm        : normalised demand at event initiation
 """
 
 # ============================================================
@@ -25,8 +39,8 @@ Requirements
 
 from pathlib import Path
 
-DATA_DIR = Path("../data")     # folder containing the two CSV files
-OUT_DIR  = Path("../results")  # all figures and CSVs are saved here
+DATA_DIR = Path(__file__).parent.parent / "data"     # folder containing the two CSV files
+OUT_DIR  = Path(__file__).parent.parent / "results"  # all figures and CSVs are saved here
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================
@@ -37,6 +51,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from matplotlib.patches import Patch
 import seaborn as sns
 import plotly.graph_objects as go
 
@@ -386,6 +401,8 @@ for i in range(F1.shape[0]):
         surf_lower[i, j] = np.percentile(p_ij, 2.5)
         surf_upper[i, j] = np.percentile(p_ij, 97.5)
 
+# ── Plotly interactive HTML ────────────────────────────────
+
 fig_html = go.Figure()
 
 fig_html.add_trace(go.Surface(
@@ -408,12 +425,16 @@ fig_html.add_trace(go.Surface(
     colorscale="Reds", showscale=False, opacity=0.35,
     name="Lower 95% CI"
 ))
-for color, label in [("blue", "Upper 95% CI"), ("red", "Lower 95% CI")]:
-    fig_html.add_trace(go.Scatter3d(
-        x=[None], y=[None], z=[None], mode="markers",
-        marker=dict(size=20, color=color),
-        name=label, showlegend=True
-    ))
+fig_html.add_trace(go.Scatter3d(
+    x=[None], y=[None], z=[None], mode="markers",
+    marker=dict(size=20, color="blue"),
+    name="Upper 95% CI", showlegend=True
+))
+fig_html.add_trace(go.Scatter3d(
+    x=[None], y=[None], z=[None], mode="markers",
+    marker=dict(size=20, color="red"),
+    name="Lower 95% CI", showlegend=True
+))
 
 fig_html.update_layout(
     font=dict(family="Times New Roman", size=20),
@@ -432,7 +453,76 @@ fig_html.update_layout(
         aspectmode="manual", aspectratio=dict(x=1.5, y=1.5, z=1.5)
     )
 )
+fig_html.data[0].update(
+    colorbar=dict(
+        title=dict(text="Mean Probability", font=dict(size=20)),
+        tickfont=dict(size=20), tickformat=".0%",
+        len=0.7, thickness=20
+    )
+)
+fig_html.data[3].marker.size = 20
+fig_html.data[4].marker.size = 20
 
-fig_html.write_html(S1_DIR / "stage1_probability_surface.html")
-print("  Interactive HTML surface saved.")
+# fig_html.write_html(S1_DIR / "stage1_probability_surface.html")
+# print("  Interactive HTML surface saved.")
+
+# ── Matplotlib 3D Surface — PNG + PDF (vector) ─────────────
+
+fig3d = plt.figure(figsize=(16, 11))
+ax3d  = fig3d.add_subplot(111, projection="3d")
+
+surf_mpl = ax3d.plot_surface(
+    F1, F2, surf_mean,
+    cmap="viridis", alpha=1.0, rasterized=True, zorder=1
+)
+ax3d.plot_surface(
+    F1, F2, surf_upper,
+    cmap="Blues", alpha=0.35, rasterized=True, zorder=2
+)
+ax3d.plot_surface(
+    F1, F2, surf_lower,
+    cmap="Reds", alpha=0.35, rasterized=True, zorder=3
+)
+
+cbar3d = fig3d.colorbar(surf_mpl, ax=ax3d, shrink=0.5, aspect=10, pad=0.08)
+cbar3d.set_label("Mean Probability", fontsize=20, labelpad=10)
+cbar3d.ax.tick_params(labelsize=20)
+cbar3d.ax.yaxis.set_major_formatter(
+    mticker.FuncFormatter(lambda x, _: f"{x:.0%}")
+)
+
+ax3d.set_xlabel(r"$D_\mathrm{norm}$", fontsize=20, labelpad=12)
+ax3d.set_ylabel("CEI",                fontsize=20, labelpad=12)
+ax3d.set_zlabel("")
+fig3d.text(0.15, 0.50, "Probability",
+           va="center", ha="center", rotation=90, fontsize=20)
+
+ax3d.tick_params(axis="x", labelsize=20)
+ax3d.tick_params(axis="y", labelsize=20)
+ax3d.tick_params(axis="z", labelsize=20)
+
+ax3d.set_zlim(0, 1)
+ax3d.zaxis.set_major_formatter(
+    mticker.FuncFormatter(lambda x, _: f"{x:.0%}")
+)
+ax3d.invert_xaxis()
+ax3d.view_init(elev=18, azim=45)
+
+legend_elements = [
+    Patch(facecolor=plt.cm.Blues(0.6), alpha=0.35, label="Upper 95% CI"),
+    Patch(facecolor=plt.cm.Reds(0.6),  alpha=0.35, label="Lower 95% CI"),
+]
+ax3d.legend(handles=legend_elements, fontsize=20,
+            loc="upper right", frameon=False)
+
+plt.subplots_adjust(left=0.25, right=0.88, bottom=0.05, top=0.95)
+fig3d.canvas.draw()
+
+fig3d.savefig(S1_DIR / "stage1_probability_surface.png",
+              dpi=300, bbox_inches="tight", pad_inches=0.35)
+fig3d.savefig(S1_DIR / "stage1_probability_surface.pdf",
+              format="pdf", bbox_inches="tight", pad_inches=0.35)
+plt.close(fig3d)
+print("  Probability surface PNG + PDF saved.")
+
 print("\nStage 1 complete. All outputs in:", S1_DIR)
